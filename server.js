@@ -67,6 +67,14 @@ db.serialize(() => {
     message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS global_chat (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    username TEXT,
+    message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 });
 
 const auth = (req, res, next) => {
@@ -300,6 +308,23 @@ app.post('/api/messages', auth, (req, res) => {
     [req.user.id, toUserId, message], function(err) {
     if (err) return res.status(500).json({ error: 'Erro ao enviar mensagem' });
     io.emit('new_message', { from: req.user.id, to: toUserId, message, username: req.user.username });
+    res.json({ success: true });
+  });
+});
+
+app.get('/api/global-chat', auth, (req, res) => {
+  db.all('SELECT * FROM global_chat ORDER BY created_at DESC LIMIT 50', (err, messages) => {
+    res.json((messages || []).reverse());
+  });
+});
+
+app.post('/api/global-chat', auth, (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'Mensagem vazia' });
+  db.run('INSERT INTO global_chat (user_id, username, message) VALUES (?, ?, ?)',
+    [req.user.id, req.user.username, message], function(err) {
+    if (err) return res.status(500).json({ error: 'Erro ao enviar' });
+    io.emit('global_message', { username: req.user.username, message });
     res.json({ success: true });
   });
 });
