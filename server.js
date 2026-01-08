@@ -18,7 +18,7 @@ const ADMIN_PASS = 'Rato123';
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('.'));
 
 const db = new sqlite3.Database('./rpg.db');
 
@@ -344,105 +344,7 @@ io.on('connection', (socket) => {
 });
 
 app.get('*', (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚔️ Reinos Perdidos - RPG Online</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: #fff; min-height: 100vh; background-attachment: fixed; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        .header { text-align: center; margin-bottom: 30px; padding: 30px; background: rgba(255,255,255,0.05); border-radius: 20px; backdrop-filter: blur(10px); }
-        .header h1 { font-size: 4em; background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: glow 2s ease-in-out infinite; }
-        @keyframes glow { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.3); } }
-        .auth-form, .game-section, .panel { background: rgba(255,255,255,0.08); padding: 30px; border-radius: 20px; margin: 20px 0; backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-        .form-group { margin: 15px 0; }
-        .form-group label { display: block; margin-bottom: 8px; color: #ffd700; font-weight: bold; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 14px; border: 2px solid rgba(255,255,255,0.2); border-radius: 10px; background: rgba(255,255,255,0.1); color: #fff; font-size: 16px; transition: all 0.3s; }
-        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #ffd700; background: rgba(255,255,255,0.15); }
-        .btn { padding: 14px 28px; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; margin: 5px; transition: all 0.3s; font-size: 16px; text-transform: uppercase; letter-spacing: 1px; }
-        .btn-primary { background: linear-gradient(45deg, #4CAF50, #45a049); color: white; }
-        .btn-secondary { background: linear-gradient(45deg, #2196F3, #1976D2); color: white; }
-        .btn-danger { background: linear-gradient(45deg, #f44336, #d32f2f); color: white; }
-        .btn-warning { background: linear-gradient(45deg, #ff9800, #f57c00); color: white; }
-        .btn-special { background: linear-gradient(45deg, #9c27b0, #7b1fa2); color: white; }
-        .btn:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.4); }
-        .character-card { background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); padding: 25px; border-radius: 15px; margin: 15px 0; border: 2px solid rgba(255,215,0,0.3); transition: all 0.3s; }
-        .character-card:hover { transform: translateY(-5px); border-color: rgba(255,215,0,0.6); box-shadow: 0 10px 30px rgba(255,215,0,0.2); }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 15px 0; }
-        .stat { background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1); font-weight: bold; }
-        .battle-area { background: linear-gradient(135deg, rgba(255,0,0,0.15), rgba(139,0,0,0.15)); padding: 25px; border-radius: 15px; margin: 20px 0; border: 2px solid rgba(255,0,0,0.3); }
-        .chat-area { background: linear-gradient(135deg, rgba(0,255,0,0.1), rgba(0,139,0,0.1)); padding: 25px; border-radius: 15px; border: 2px solid rgba(0,255,0,0.3); }
-        .pvp-area { background: linear-gradient(135deg, rgba(255,165,0,0.15), rgba(255,140,0,0.15)); padding: 25px; border-radius: 15px; border: 2px solid rgba(255,165,0,0.3); }
-        .admin-panel { background: linear-gradient(135deg, rgba(138,43,226,0.2), rgba(75,0,130,0.2)); padding: 30px; border-radius: 15px; border: 2px solid rgba(138,43,226,0.5); }
-        .hidden { display: none; }
-        .message { padding: 15px; margin: 10px 0; border-radius: 10px; animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        .success { background: rgba(76, 175, 80, 0.4); border-left: 4px solid #4CAF50; }
-        .error { background: rgba(244, 67, 54, 0.4); border-left: 4px solid #f44336; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
-        .chat-messages { height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin: 15px 0; }
-        .chat-message { padding: 10px; margin: 8px 0; border-radius: 8px; background: rgba(255,255,255,0.1); }
-        .player-list { max-height: 400px; overflow-y: auto; }
-        .player-card { background: rgba(255,255,255,0.08); padding: 15px; margin: 10px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); transition: all 0.3s; }
-        .player-card:hover { background: rgba(255,255,255,0.12); transform: translateX(5px); }
-        ::-webkit-scrollbar { width: 10px; }
-        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
-        ::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.5); border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>⚔️ REINOS PERDIDOS ⚔️</h1>
-            <p style="font-size: 1.2em; color: #ffd700;">RPG de Mesa Online Multiplayer</p>
-        </div>
-        <div id="auth-section">
-            <div class="auth-form">
-                <h2 style="text-align: center; margin-bottom: 20px;">🏰 Entrar no Reino</h2>
-                <div class="form-group"><label>👤 Usuário:</label><input type="text" id="username" placeholder="Digite seu nome de usuário"></div>
-                <div class="form-group"><label>🔒 Senha:</label><input type="password" id="password" placeholder="Digite sua senha"></div>
-                <div style="text-align: center;"><button class="btn btn-primary" onclick="login()">Entrar</button><button class="btn btn-secondary" onclick="register()">Criar Conta</button></div>
-            </div>
-        </div>
-        <div id="game-section" class="hidden">
-            <div class="game-section">
-                <h2>Bem-vindo, <span id="player-name" style="color: #ffd700;"></span>! <span id="admin-badge" class="hidden" style="background: purple; padding: 5px 10px; border-radius: 5px; font-size: 14px;">👑 ADMIN</span></h2>
-                <button class="btn btn-danger" onclick="logout()">Sair</button>
-                <button id="admin-btn" class="btn btn-warning hidden" onclick="toggleAdmin()">Painel Admin</button>
-            </div>
-            <div id="admin-panel" class="admin-panel hidden">
-                <h2>👑 PAINEL DE ADMINISTRAÇÃO</h2>
-                <div class="grid"><div class="panel"><h3>👥 Usuários</h3><div id="admin-users-list"></div><button class="btn btn-secondary" onclick="loadAdminUsers()">Atualizar</button></div>
-                <div class="panel"><h3>⚔️ Personagens</h3><div id="admin-chars-list"></div><button class="btn btn-secondary" onclick="loadAdminChars()">Atualizar</button></div></div>
-            </div>
-            <div class="grid">
-                <div class="game-section"><h3>🧙♂️ Criar Personagem</h3><div class="form-group"><label>Nome:</label><input type="text" id="char-name" placeholder="Nome do personagem"></div>
-                <div class="form-group"><label>Classe:</label><select id="char-class"><option value="Guerreiro">⚔️ Guerreiro - Fúria de Batalha</option><option value="Mago">🔮 Mago - Explosão Arcana</option><option value="Arqueiro">🏹 Arqueiro - Flecha Perfurante</option></select></div>
-                <button class="btn btn-primary" onclick="createCharacter()">Criar Personagem</button></div>
-                <div class="game-section"><h3>👥 Seus Personagens</h3><div id="characters-list"></div><button class="btn btn-secondary" onclick="loadCharacters()">Atualizar</button></div>
-            </div>
-            <div id="battle-section" class="battle-area hidden"><h3>⚔️ ARENA DE BATALHA</h3><div id="battle-info"></div>
-                <div style="margin: 20px 0;"><button class="btn btn-danger" onclick="battle('attack')">🗡️ Atacar</button><button class="btn btn-primary" onclick="battle('magic')">✨ Magia (-10 MP)</button>
-                <button class="btn btn-secondary" onclick="battle('defend')">🛡️ Defender</button><button class="btn btn-special" onclick="battle('special')" id="special-btn">⚡ Poder Especial (-30 MP)</button></div>
-                <div id="battle-result"></div></div>
-            <div class="pvp-area"><h3>⚔️ BATALHA PvP - Desafiar Jogadores</h3><div class="player-list" id="online-players"></div><button class="btn btn-warning" onclick="loadOnlinePlayers()">Atualizar Jogadores</button></div>
-            <div class="grid"><div class="game-section"><h3>👫 Amigos</h3><div class="form-group"><input type="text" id="friend-username" placeholder="Nome do usuário"><button class="btn btn-primary" onclick="addFriend()">Adicionar</button></div>
-                <div id="friends-list"></div><button class="btn btn-secondary" onclick="loadFriends()">Atualizar</button></div>
-                <div class="chat-area"><h3>💬 Chat</h3><div class="form-group"><select id="chat-friend-select"><option value="">Selecione um amigo</option></select></div>
-                <div class="chat-messages" id="chat-messages"></div><div class="form-group"><textarea id="chat-input" rows="2" placeholder="Digite sua mensagem..."></textarea><button class="btn btn-primary" onclick="sendMessage()">Enviar</button></div></div>
-            </div>
-        </div>
-        <div id="messages"></div>
-    </div>
-    <script>
-let token=localStorage.getItem('token'),currentUser=null,currentCharacter=null,socket=io();token&&(showGame(),loadCharacters(),loadFriends());async function api(e,t="GET",a=null){const n={method:t,headers:{"Content-Type":"application/json"}};return token&&(n.headers.Authorization=\`Bearer \${token}\`),a&&(n.body=JSON.stringify(a)),await(await fetch(\`/api\${e}\`,n)).json()}function showMessage(e,t="success"){const a=document.createElement("div");a.className=\`message \${t}\`,a.textContent=e,document.getElementById("messages").appendChild(a),setTimeout((()=>a.remove()),4e3)}async function register(){const e=document.getElementById("username").value,t=document.getElementById("password").value,a=await api("/register","POST",{username:e,password:t});a.token?(token=a.token,currentUser=a.user,localStorage.setItem("token",token),document.getElementById("player-name").textContent=a.user.username,showGame(),showMessage("✅ Conta criada com sucesso!")):showMessage(a.error,"error")}async function login(){const e=document.getElementById("username").value,t=document.getElementById("password").value,a=await api("/login","POST",{username:e,password:t});a.token?(token=a.token,currentUser=a.user,localStorage.setItem("token",token),document.getElementById("player-name").textContent=a.user.username,a.user.isAdmin&&(document.getElementById("admin-badge").classList.remove("hidden"),document.getElementById("admin-btn").classList.remove("hidden")),showGame(),loadCharacters(),loadFriends(),showMessage("✅ Login realizado!")):showMessage(a.error,"error")}function logout(){token=null,currentUser=null,localStorage.removeItem("token"),document.getElementById("auth-section").classList.remove("hidden"),document.getElementById("game-section").classList.add("hidden"),showMessage("👋 Logout realizado!")}function showGame(){document.getElementById("auth-section").classList.add("hidden"),document.getElementById("game-section").classList.remove("hidden")}async function createCharacter(){const e=document.getElementById("char-name").value,t=document.getElementById("char-class").value;if(!e)return showMessage("Digite um nome!","error");const a=await api("/characters","POST",{name:e,characterClass:t});a.message?(showMessage("✅ "+a.message),document.getElementById("char-name").value="",loadCharacters()):showMessage(a.error,"error")}async function loadCharacters(){const e=await api("/characters"),t=document.getElementById("characters-list");0===e.length?t.innerHTML="<p>Nenhum personagem criado.</p>":t.innerHTML=e.map((e=>\`<div class="character-card"><h4>\${e.name} - \${e.class} (Nível \${e.level})</h4><p style="color: #ffd700;">⚡ \${e.special_power}</p><div class="stats"><div class="stat">❤️ \${e.hp}/\${e.max_hp}</div><div class="stat">💙 \${e.mp}/\${e.max_mp}</div><div class="stat">⭐ \${e.exp}/\${100*e.level}</div><div class="stat">💰 \${e.gold}</div><div class="stat">💪 \${e.str}</div><div class="stat">🧠 \${e.int}</div><div class="stat">⚡ \${e.agi}</div></div><button class="btn btn-danger" onclick="startBattle(\${e.id})">Batalhar PvE</button></div>\`)).join("")}function startBattle(e){currentCharacter=e,document.getElementById("battle-section").classList.remove("hidden"),document.getElementById("battle-info").innerHTML='<p style="font-size: 1.5em;">🐉 Um Goblin selvagem apareceu! (60 HP)</p>',document.getElementById("battle-result").innerHTML=""}async function battle(e){if(!currentCharacter)return;const t=await api(\`/battle/\${currentCharacter}\`,"POST",{action:e});if(t.error)return showMessage(t.error,"error");let a=\`<p style="font-size: 1.2em;">\${t.message}</p>\`;a+=\`<p>🐉 Goblin HP: <span style="color: #f44336;">\${t.enemyHp}</span></p>\`,a+=\`<p>👤 Seu HP: <span style="color: #4CAF50;">\${t.playerHp}</span></p>\`,t.cooldown>0&&(a+=\`<p>⏳ Cooldown Poder: \${t.cooldown} turnos</p>\`),t.levelUp&&(a+='<p style="color: #ffd700; font-size: 1.5em;">🎉 LEVEL UP!</p>'),(t.victory||t.defeat)&&(a+='<button class="btn btn-secondary" onclick="endBattle()">Nova Batalha</button>',loadCharacters()),document.getElementById("battle-result").innerHTML=a}function endBattle(){document.getElementById("battle-section").classList.add("hidden"),currentCharacter=null}async function loadOnlinePlayers(){const e=await api("/characters/online"),t=document.getElementById("online-players");0===e.length?t.innerHTML="<p>Nenhum jogador online.</p>":t.innerHTML=e.map((e=>\`<div class="player-card"><h4>\${e.name} (\${e.username}) - \${e.class} Nv.\${e.level}</h4><p>💪 STR: \${e.str} | 🧠 INT: \${e.int} | ⚡ AGI: \${e.agi}</p><button class="btn btn-warning" onclick="challengePlayer(\${e.id})">⚔️ Desafiar</button></div>\`)).join("")}async function challengePlayer(e){const t=await api("/characters");if(0===t.length)return showMessage("Crie um personagem primeiro!","error");const a=t[0].id,n=await api("/pvp/challenge","POST",{myCharId:a,opponentCharId:e});if(n.error)return showMessage(n.error,"error");let s=n.victory?"🎉 VITÓRIA!":"😢 DERROTA!";s+=\`\n+\${n.expGain} EXP, +\${n.goldGain} ouro\n\nRounds:\n\${n.rounds.join("\n")}\`,alert(s),loadCharacters()}async function addFriend(){const e=document.getElementById("friend-username").value;if(!e)return showMessage("Digite o nome!","error");const t=await api("/friends","POST",{username:e});t.message?(showMessage("✅ "+t.message),document.getElementById("friend-username").value="",loadFriends()):showMessage(t.error,"error")}async function loadFriends(){const e=await api("/friends"),t=document.getElementById("friends-list"),a=document.getElementById("chat-friend-select");0===e.length?t.innerHTML="<p>Nenhum amigo adicionado.</p>":(t.innerHTML=e.map((e=>\`<div style="padding: 12px; margin: 8px 0; background: rgba(255,255,255,0.1); border-radius: 8px;">👤 \${e.username}<button class="btn btn-primary" style="padding: 8px 16px; margin-left: 10px;" onclick="openChat(\${e.id}, '\${e.username}')">💬 Chat</button></div>\`)).join(""),a.innerHTML="<option value=\"\">Selecione um amigo</option>"+e.map((e=>\`<option value="\${e.id}">\${e.username}</option>\`)).join(""))}let currentChatFriend=null;function openChat(e,t){currentChatFriend=e,document.getElementById("chat-friend-select").value=e,loadMessages(e)}async function loadMessages(e){if(!e)return;const t=await api(\`/messages/\${e}\`),a=document.getElementById("chat-messages");a.innerHTML=t.map((e=>\`<div class="chat-message" style="background: \${e.from_user_id==currentUser.id?"rgba(33,150,243,0.3)":"rgba(76,175,80,0.3)"};"><strong>\${e.from_username}:</strong> \${e.message}</div>\`)).join(""),a.scrollTop=a.scrollHeight}async function sendMessage(){const e=document.getElementById("chat-friend-select").value,t=document.getElementById("chat-input").value;if(!e||!t)return showMessage("Selecione um amigo e digite uma mensagem!","error");await api("/messages","POST",{toUserId:e,message:t}),document.getElementById("chat-input").value="",loadMessages(e)}function toggleAdmin(){const e=document.getElementById("admin-panel");e.classList.toggle("hidden"),e.classList.contains("hidden")||(loadAdminUsers(),loadAdminChars())}async function loadAdminUsers(){const e=await api("/admin/users"),t=document.getElementById("admin-users-list");t.innerHTML=e.map((e=>\`<div style="padding: 10px; margin: 5px 0; background: rgba(255,255,255,0.1); border-radius: 5px;"><strong>\${e.username}</strong> - \${e.is_banned?"🚫 Banido":"✅ Ativo"}<button class="btn \${e.is_banned?"btn-primary":"btn-danger"}" style="padding: 5px 10px;" onclick="\${e.is_banned?"unbanUser":"banUser"}(\${e.id})">\${e.is_banned?"Desbanir":"Banir"}</button></div>\`)).join("")}async function loadAdminChars(){const e=await api("/admin/characters"),t=document.getElementById("admin-chars-list");t.innerHTML=e.map((e=>\`<div style="padding: 10px; margin: 5px 0; background: rgba(255,255,255,0.1); border-radius: 5px;"><strong>\${e.name}</strong> (\${e.username}) - Nv.\${e.level}<input type="number" id="level-\${e.id}" value="\${e.level}" style="width: 60px; padding: 5px; margin: 0 5px;"><button class="btn btn-warning" style="padding: 5px 10px;" onclick="setLevel(\${e.id})">Alterar</button></div>\`)).join("")}async function banUser(e){await api(\`/admin/ban/\${e}\`,"POST"),showMessage("✅ Usuário banido"),loadAdminUsers()}async function unbanUser(e){await api(\`/admin/unban/\${e}\`,"POST"),showMessage("✅ Usuário desbanido"),loadAdminUsers()}async function setLevel(e){const t=document.getElementById(\`level-\${e}\`).value;await api("/admin/setlevel","POST",{charId:e,level:t}),showMessage("✅ Nível alterado"),loadAdminChars()}socket.on("new_message",(e=>{currentChatFriend&&(e.from==currentChatFriend||e.to==currentChatFriend)&&loadMessages(currentChatFriend)}));
-    </script>
-</body>
-</html>`);
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 server.listen(PORT, () => {
