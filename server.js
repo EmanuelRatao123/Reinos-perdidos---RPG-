@@ -24,7 +24,7 @@ app.use(express.static('.'));
 
 const db = new sqlite3.Database('./rpg.db');
 
-const sanitize = (str) => String(str).replace(/[<>\"']/g, '');
+const sanitize = (str) => String(str).replace(/[<>"']/g, '');
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS users (
@@ -37,57 +37,36 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS character_templates (
+  db.run(`CREATE TABLE IF NOT EXISTS characters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
     name TEXT NOT NULL,
     class TEXT NOT NULL,
+    level INTEGER DEFAULT 1,
+    exp INTEGER DEFAULT 0,
     hp INTEGER,
+    max_hp INTEGER,
     mp INTEGER,
+    max_mp INTEGER,
     str INTEGER,
     int INTEGER,
     agi INTEGER,
-    price INTEGER DEFAULT 0,
-    image TEXT,
-    description TEXT,
-    created_by_admin BOOLEAN DEFAULT 1
+    ultimate_name TEXT,
+    ultimate_damage INTEGER,
+    ultimate_mp_cost INTEGER,
+    ultimate_cooldown INTEGER DEFAULT 3,
+    ultimate_ready INTEGER DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
 
-  db.run(`CREATE TABLE IF NOT EXISTS user_characters (
+  db.run(`CREATE TABLE IF NOT EXISTS friendships (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
-    template_id INTEGER,
-    nickname TEXT,
-    level INTEGER DEFAULT 1,
-    exp INTEGER DEFAULT 0,
-    FOREIGN KEY (user_id) REFERENCES users (id),
-    FOREIGN KEY (template_id) REFERENCES character_templates (id)
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS skills (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    damage INTEGER,
-    mp_cost INTEGER,
-    cooldown INTEGER,
-    effect TEXT,
-    created_by_admin BOOLEAN DEFAULT 1
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS shop_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_type TEXT,
-    item_id INTEGER,
-    price INTEGER,
-    duration_hours INTEGER DEFAULT 24,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS battle_requests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    challenger_id INTEGER,
-    opponent_id INTEGER,
+    friend_id INTEGER,
     status TEXT DEFAULT 'pending',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    FOREIGN KEY (friend_id) REFERENCES users (id)
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS global_chat (
@@ -98,15 +77,46 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
-  db.run(`INSERT OR IGNORE INTO character_templates (id, name, class, hp, mp, str, int, agi, price, description) VALUES
-    (1, 'Guerreiro Lendário', 'Guerreiro', 150, 50, 20, 10, 12, 1000, 'Um guerreiro poderoso'),
-    (2, 'Mago Supremo', 'Mago', 100, 150, 10, 25, 15, 1200, 'Mestre das artes arcanas'),
-    (3, 'Arqueiro Élfico', 'Arqueiro', 120, 80, 15, 12, 25, 1100, 'Precisão mortal')`);
+  db.run(`CREATE TABLE IF NOT EXISTS shop_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    class TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    hp INTEGER,
+    mp INTEGER,
+    str INTEGER,
+    int INTEGER,
+    agi INTEGER,
+    ultimate_name TEXT,
+    ultimate_damage INTEGER,
+    ultimate_mp_cost INTEGER,
+    description TEXT,
+    duration_hours INTEGER DEFAULT 24,
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 
-  db.run(`INSERT OR IGNORE INTO skills (id, name, damage, mp_cost, cooldown, effect) VALUES
-    (1, 'Golpe Devastador', 50, 20, 2, 'Dano massivo'),
-    (2, 'Bola de Fogo', 60, 30, 3, 'Dano mágico'),
-    (3, 'Flecha Tripla', 45, 25, 2, 'Ataque múltiplo')`);
+  db.run(`CREATE TABLE IF NOT EXISTS pve_battles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_id INTEGER,
+    monster_name TEXT,
+    monster_hp INTEGER,
+    monster_max_hp INTEGER,
+    monster_str INTEGER,
+    turn INTEGER DEFAULT 1,
+    status TEXT DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS pvp_battles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    challenger_id INTEGER,
+    opponent_id INTEGER,
+    challenger_char_id INTEGER,
+    opponent_char_id INTEGER,
+    status TEXT DEFAULT 'pending',
+    winner_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 });
 
 const auth = (req, res, next) => {
@@ -132,7 +142,7 @@ app.post('/api/register', async (req, res) => {
   db.run('INSERT INTO users (username, password) VALUES (?, ?)', [cleanUser, hashedPassword], function(err) {
     if (err) return res.status(400).json({ error: 'Usuário já existe' });
     const token = jwt.sign({ id: this.lastID, username: cleanUser, isAdmin: false }, JWT_SECRET);
-    res.json({ token, user: { id: this.lastID, username: cleanUser, isAdmin: false } });
+    res.json({ token, user: { id: this.lastID, username: cleanUser, isAdmin: false, gold: 500 } });
   });
 });
 
@@ -152,12 +162,12 @@ app.post('/api/login', async (req, res) => {
         db.run('INSERT INTO users (username, password, is_admin, gold) VALUES (?, ?, 1, 999999)', 
           [username, hashedPassword], function(err) {
           const token = jwt.sign({ id: this.lastID, username, isAdmin: true }, JWT_SECRET);
-          return res.json({ token, user: { id: this.lastID, username, isAdmin: true } });
+          return res.json({ token, user: { id: this.lastID, username, isAdmin: true, gold: 999999 } });
         });
       } else {
         db.run('UPDATE users SET is_admin = 1 WHERE id = ?', [user.id]);
         const token = jwt.sign({ id: user.id, username, isAdmin: true }, JWT_SECRET);
-        return res.json({ token, user: { id: user.id, username, isAdmin: true } });
+        return res.json({ token, user: { id: user.id, username, isAdmin: true, gold: user.gold } });
       }
     });
     return;
@@ -177,62 +187,213 @@ app.post('/api/login', async (req, res) => {
   });
 });
 
-app.get('/api/shop', auth, (req, res) => {
-  db.all(`SELECT s.*, c.name, c.class, c.description, c.price as base_price 
-          FROM shop_items s 
-          JOIN character_templates c ON s.item_id = c.id 
-          WHERE s.item_type = 'character' 
-          AND datetime(s.added_at, '+' || s.duration_hours || ' hours') > datetime('now')`,
-    (err, items) => {
-    res.json(items || []);
+app.post('/api/characters/create', auth, (req, res) => {
+  const { name, characterClass } = req.body;
+  const cleanName = sanitize(name);
+  let stats = {};
+  if (characterClass === 'Guerreiro') {
+    stats = { hp: 150, mp: 50, str: 20, int: 10, agi: 12, ult: 'Fúria de Batalha', ultDmg: 80, ultMp: 30 };
+  } else if (characterClass === 'Mago') {
+    stats = { hp: 100, mp: 150, str: 10, int: 25, agi: 15, ult: 'Explosão Arcana', ultDmg: 100, ultMp: 40 };
+  } else if (characterClass === 'Arqueiro') {
+    stats = { hp: 120, mp: 80, str: 15, int: 12, agi: 25, ult: 'Flecha Perfurante', ultDmg: 90, ultMp: 35 };
+  }
+  
+  db.run(`INSERT INTO characters (user_id, name, class, hp, max_hp, mp, max_mp, str, int, agi, ultimate_name, ultimate_damage, ultimate_mp_cost) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [req.user.id, cleanName, characterClass, stats.hp, stats.hp, stats.mp, stats.mp, stats.str, stats.int, stats.agi, stats.ult, stats.ultDmg, stats.ultMp],
+    function(err) {
+      if (err) return res.status(500).json({ error: 'Erro ao criar personagem' });
+      res.json({ message: 'Personagem criado!', charId: this.lastID });
+    });
+});
+
+app.get('/api/characters', auth, (req, res) => {
+  db.all('SELECT * FROM characters WHERE user_id = ?', [req.user.id], (err, chars) => {
+    res.json(chars || []);
   });
 });
 
-app.post('/api/shop/buy/:itemId', auth, (req, res) => {
-  db.get('SELECT * FROM character_templates WHERE id = ?', [req.params.itemId], (err, template) => {
-    if (!template) return res.status(404).json({ error: 'Item não encontrado' });
-    db.get('SELECT gold FROM users WHERE id = ?', [req.user.id], (err, user) => {
-      if (user.gold < template.price) return res.status(400).json({ error: 'Ouro insuficiente' });
-      db.run('UPDATE users SET gold = gold - ? WHERE id = ?', [template.price, req.user.id]);
-      db.run('INSERT INTO user_characters (user_id, template_id, nickname) VALUES (?, ?, ?)',
-        [req.user.id, template.id, template.name], function(err) {
-        res.json({ message: 'Personagem comprado!', charId: this.lastID });
+app.post('/api/characters/:id/level-up', auth, (req, res) => {
+  db.get('SELECT * FROM characters WHERE id = ? AND user_id = ?', [req.params.id, req.user.id], (err, char) => {
+    if (!char) return res.status(404).json({ error: 'Personagem não encontrado' });
+    const expNeeded = char.level * 100;
+    if (char.exp < expNeeded) return res.status(400).json({ error: 'EXP insuficiente' });
+    
+    db.run(`UPDATE characters SET level = level + 1, exp = exp - ?, max_hp = max_hp + 10, max_mp = max_mp + 5, 
+            str = str + 2, int = int + 2, agi = agi + 2, hp = max_hp + 10, mp = max_mp + 5 WHERE id = ?`,
+      [expNeeded, req.params.id], () => {
+      res.json({ message: 'Level UP! +10 HP, +5 MP, +2 todos atributos' });
+    });
+  });
+});
+
+app.post('/api/pve/start', auth, (req, res) => {
+  const { charId } = req.body;
+  const monsters = [
+    { name: 'Goblin', hp: 80, str: 12 },
+    { name: 'Orc', hp: 120, str: 18 },
+    { name: 'Dragão', hp: 200, str: 25 }
+  ];
+  const monster = monsters[Math.floor(Math.random() * monsters.length)];
+  
+  db.run('INSERT INTO pve_battles (character_id, monster_name, monster_hp, monster_max_hp, monster_str) VALUES (?, ?, ?, ?, ?)',
+    [charId, monster.name, monster.hp, monster.hp, monster.str], function(err) {
+    res.json({ battleId: this.lastID, monster });
+  });
+});
+
+app.get('/api/pve/:battleId', auth, (req, res) => {
+  db.get('SELECT * FROM pve_battles WHERE id = ?', [req.params.battleId], (err, battle) => {
+    if (!battle) return res.status(404).json({ error: 'Batalha não encontrada' });
+    db.get('SELECT * FROM characters WHERE id = ?', [battle.character_id], (err, char) => {
+      res.json({ battle, character: char });
+    });
+  });
+});
+
+app.post('/api/pve/:battleId/action', auth, (req, res) => {
+  const { action } = req.body;
+  db.get('SELECT * FROM pve_battles WHERE id = ?', [req.params.battleId], (err, battle) => {
+    if (!battle || battle.status !== 'active') return res.status(400).json({ error: 'Batalha inválida' });
+    
+    db.get('SELECT * FROM characters WHERE id = ?', [battle.character_id], (err, char) => {
+      let log = [];
+      let damage = 0;
+      let mpCost = 0;
+      
+      if (action === 'attack') {
+        damage = char.str + Math.floor(Math.random() * 10);
+        log.push(`Você atacou causando ${damage} de dano!`);
+      } else if (action === 'magic') {
+        if (char.mp < 10) return res.status(400).json({ error: 'MP insuficiente' });
+        damage = char.int * 2 + Math.floor(Math.random() * 15);
+        mpCost = 10;
+        log.push(`Você usou magia causando ${damage} de dano!`);
+      } else if (action === 'defend') {
+        log.push('Você se defendeu!');
+      } else if (action === 'ultimate') {
+        if (char.mp < char.ultimate_mp_cost) return res.status(400).json({ error: 'MP insuficiente' });
+        if (char.ultimate_ready === 0) return res.status(400).json({ error: 'Ultimate em cooldown' });
+        damage = char.ultimate_damage;
+        mpCost = char.ultimate_mp_cost;
+        log.push(`💥 ${char.ultimate_name}! ${damage} de dano devastador!`);
+        db.run('UPDATE characters SET ultimate_ready = 0 WHERE id = ?', [char.id]);
+      }
+      
+      let newMonsterHp = battle.monster_hp - damage;
+      
+      if (newMonsterHp <= 0) {
+        db.run('UPDATE pve_battles SET status = ?, monster_hp = 0 WHERE id = ?', ['victory', battle.id]);
+        db.run('UPDATE characters SET exp = exp + 25, hp = max_hp, mp = max_mp, ultimate_ready = 1 WHERE id = ?', [char.id]);
+        db.run('UPDATE users SET gold = gold + 15 WHERE id = ?', [req.user.id]);
+        log.push('🎉 VITÓRIA! +25 EXP, +15 ouro');
+        return res.json({ status: 'victory', log });
+      }
+      
+      let monsterDamage = action === 'defend' ? Math.floor(battle.monster_str / 2) : battle.monster_str;
+      let newCharHp = char.hp - monsterDamage;
+      log.push(`${battle.monster_name} atacou causando ${monsterDamage} de dano!`);
+      
+      if (newCharHp <= 0) {
+        db.run('UPDATE pve_battles SET status = ? WHERE id = ?', ['defeat', battle.id]);
+        db.run('UPDATE characters SET hp = max_hp, mp = max_mp, ultimate_ready = 1 WHERE id = ?', [char.id]);
+        log.push('💀 DERROTA! Tente novamente.');
+        return res.json({ status: 'defeat', log });
+      }
+      
+      db.run('UPDATE pve_battles SET monster_hp = ?, turn = turn + 1 WHERE id = ?', [newMonsterHp, battle.id]);
+      db.run('UPDATE characters SET hp = ?, mp = mp - ? WHERE id = ?', [newCharHp, mpCost, char.id]);
+      
+      if (battle.turn % 3 === 0) {
+        db.run('UPDATE characters SET ultimate_ready = 1 WHERE id = ?', [char.id]);
+        log.push('⚡ Ultimate pronta!');
+      }
+      
+      res.json({ status: 'active', log, character: { hp: newCharHp, mp: char.mp - mpCost }, monster: { hp: newMonsterHp } });
+    });
+  });
+});
+
+app.post('/api/pvp/challenge', auth, (req, res) => {
+  const { opponentId, charId } = req.body;
+  db.run('INSERT INTO pvp_battles (challenger_id, opponent_id, challenger_char_id) VALUES (?, ?, ?)',
+    [req.user.id, opponentId, charId], function(err) {
+    io.emit('pvp_challenge', { from: req.user.username, toId: opponentId, battleId: this.lastID });
+    res.json({ message: 'Desafio enviado!', battleId: this.lastID });
+  });
+});
+
+app.get('/api/pvp/challenges', auth, (req, res) => {
+  db.all(`SELECT p.*, u.username as challenger_name FROM pvp_battles p 
+          JOIN users u ON p.challenger_id = u.id 
+          WHERE p.opponent_id = ? AND p.status = 'pending'`, [req.user.id], (err, battles) => {
+    res.json(battles || []);
+  });
+});
+
+app.post('/api/pvp/:battleId/accept', auth, (req, res) => {
+  const { charId } = req.body;
+  db.get('SELECT * FROM pvp_battles WHERE id = ?', [req.params.battleId], (err, battle) => {
+    if (!battle) return res.status(404).json({ error: 'Batalha não encontrada' });
+    
+    db.get('SELECT * FROM characters WHERE id = ?', [battle.challenger_char_id], (err, char1) => {
+      db.get('SELECT * FROM characters WHERE id = ?', [charId], (err, char2) => {
+        const power1 = char1.str + char1.int + char1.agi + char1.hp;
+        const power2 = char2.str + char2.int + char2.agi + char2.hp;
+        const winner = power1 > power2 ? battle.challenger_id : req.user.id;
+        
+        db.run('UPDATE pvp_battles SET status = ?, opponent_char_id = ?, winner_id = ? WHERE id = ?',
+          ['completed', charId, winner, battle.id]);
+        
+        if (winner === req.user.id) {
+          db.run('UPDATE characters SET exp = exp + 50 WHERE id = ?', [charId]);
+          db.run('UPDATE characters SET exp = exp + 10 WHERE id = ?', [char1.id]);
+          db.run('UPDATE users SET gold = gold + 30 WHERE id = ?', [req.user.id]);
+          db.run('UPDATE users SET gold = gold + 5 WHERE id = ?', [battle.challenger_id]);
+          res.json({ result: 'victory', message: '🎉 VITÓRIA! +50 EXP, +30 ouro' });
+        } else {
+          db.run('UPDATE characters SET exp = exp + 50 WHERE id = ?', [char1.id]);
+          db.run('UPDATE characters SET exp = exp + 10 WHERE id = ?', [charId]);
+          db.run('UPDATE users SET gold = gold + 30 WHERE id = ?', [battle.challenger_id]);
+          db.run('UPDATE users SET gold = gold + 5 WHERE id = ?', [req.user.id]);
+          res.json({ result: 'defeat', message: '💀 DERROTA! +10 EXP, +5 ouro' });
+        }
       });
     });
   });
 });
 
-app.get('/api/my-characters', auth, (req, res) => {
-  db.all(`SELECT uc.*, ct.name, ct.class, ct.hp, ct.mp, ct.str, ct.int, ct.agi 
-          FROM user_characters uc 
-          JOIN character_templates ct ON uc.template_id = ct.id 
-          WHERE uc.user_id = ?`, [req.user.id], (err, chars) => {
-    res.json(chars || []);
+app.post('/api/friends/add', auth, (req, res) => {
+  const { friendUsername } = req.body;
+  db.get('SELECT id FROM users WHERE username = ?', [friendUsername], (err, friend) => {
+    if (!friend) return res.status(404).json({ error: 'Usuário não encontrado' });
+    db.run('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)', [req.user.id, friend.id], () => {
+      res.json({ message: 'Pedido de amizade enviado!' });
+    });
   });
 });
 
-app.post('/api/battle/request', auth, (req, res) => {
-  const { opponentId } = req.body;
-  db.run('INSERT INTO battle_requests (challenger_id, opponent_id) VALUES (?, ?)',
-    [req.user.id, opponentId], function(err) {
-    if (err) return res.status(500).json({ error: 'Erro ao enviar desafio' });
-    io.emit('battle_request', { from: req.user.username, toId: opponentId, requestId: this.lastID });
-    res.json({ message: 'Desafio enviado!' });
+app.get('/api/friends', auth, (req, res) => {
+  db.all(`SELECT f.*, u.username FROM friendships f 
+          JOIN users u ON f.friend_id = u.id 
+          WHERE f.user_id = ? AND f.status = 'accepted'`, [req.user.id], (err, friends) => {
+    res.json(friends || []);
   });
 });
 
-app.get('/api/battle/requests', auth, (req, res) => {
-  db.all(`SELECT br.*, u.username as challenger_name 
-          FROM battle_requests br 
-          JOIN users u ON br.challenger_id = u.id 
-          WHERE br.opponent_id = ? AND br.status = 'pending'`, [req.user.id], (err, requests) => {
+app.get('/api/friends/requests', auth, (req, res) => {
+  db.all(`SELECT f.*, u.username FROM friendships f 
+          JOIN users u ON f.user_id = u.id 
+          WHERE f.friend_id = ? AND f.status = 'pending'`, [req.user.id], (err, requests) => {
     res.json(requests || []);
   });
 });
 
-app.post('/api/battle/accept/:requestId', auth, (req, res) => {
-  db.run('UPDATE battle_requests SET status = ? WHERE id = ?', ['accepted', req.params.requestId]);
-  res.json({ message: 'Desafio aceito!' });
+app.post('/api/friends/:id/accept', auth, (req, res) => {
+  db.run('UPDATE friendships SET status = ? WHERE id = ?', ['accepted', req.params.id], () => {
+    res.json({ message: 'Amizade aceita!' });
+  });
 });
 
 app.get('/api/global-chat', auth, (req, res) => {
@@ -245,54 +406,40 @@ app.post('/api/global-chat', auth, (req, res) => {
   const { message } = req.body;
   const cleanMsg = sanitize(message);
   db.run('INSERT INTO global_chat (user_id, username, message) VALUES (?, ?, ?)',
-    [req.user.id, req.user.username, cleanMsg], function(err) {
+    [req.user.id, req.user.username, cleanMsg], () => {
     io.emit('global_message', { username: req.user.username, message: cleanMsg });
     res.json({ success: true });
   });
 });
 
-app.post('/api/admin/character/create', auth, adminAuth, (req, res) => {
-  const { name, characterClass, hp, mp, str, int, agi, price, description } = req.body;
-  db.run(`INSERT INTO character_templates (name, class, hp, mp, str, int, agi, price, description) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [name, characterClass, hp, mp, str, int, agi, price, description], function(err) {
-    res.json({ message: 'Personagem criado!', id: this.lastID });
+app.get('/api/shop', auth, (req, res) => {
+  db.all(`SELECT * FROM shop_items WHERE datetime(added_at, '+' || duration_hours || ' hours') > datetime('now')`, (err, items) => {
+    res.json(items || []);
   });
 });
 
-app.post('/api/admin/skill/create', auth, adminAuth, (req, res) => {
-  const { name, damage, mpCost, cooldown, effect } = req.body;
-  db.run('INSERT INTO skills (name, damage, mp_cost, cooldown, effect) VALUES (?, ?, ?, ?, ?)',
-    [name, damage, mpCost, cooldown, effect], function(err) {
-    res.json({ message: 'Skill criada!', id: this.lastID });
+app.post('/api/shop/buy/:itemId', auth, (req, res) => {
+  db.get('SELECT * FROM shop_items WHERE id = ?', [req.params.itemId], (err, item) => {
+    if (!item) return res.status(404).json({ error: 'Item não encontrado' });
+    db.get('SELECT gold FROM users WHERE id = ?', [req.user.id], (err, user) => {
+      if (user.gold < item.price) return res.status(400).json({ error: 'Ouro insuficiente' });
+      db.run('UPDATE users SET gold = gold - ? WHERE id = ?', [item.price, req.user.id]);
+      db.run(`INSERT INTO characters (user_id, name, class, hp, max_hp, mp, max_mp, str, int, agi, ultimate_name, ultimate_damage, ultimate_mp_cost) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [req.user.id, item.name, item.class, item.hp, item.hp, item.mp, item.mp, item.str, item.int, item.agi, item.ultimate_name, item.ultimate_damage, item.ultimate_mp_cost],
+        () => {
+        res.json({ message: 'Personagem comprado!' });
+      });
+    });
   });
 });
 
 app.post('/api/admin/shop/add', auth, adminAuth, (req, res) => {
-  const { itemId, price, duration } = req.body;
-  db.run('INSERT INTO shop_items (item_type, item_id, price, duration_hours) VALUES (?, ?, ?, ?)',
-    ['character', itemId, price, duration], function(err) {
+  const { name, characterClass, price, hp, mp, str, int, agi, ultName, ultDmg, ultMp, duration } = req.body;
+  db.run(`INSERT INTO shop_items (name, class, price, hp, mp, str, int, agi, ultimate_name, ultimate_damage, ultimate_mp_cost, duration_hours) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [name, characterClass, price, hp, mp, str, int, agi, ultName, ultDmg, ultMp, duration], () => {
     res.json({ message: 'Item adicionado à loja!' });
-  });
-});
-
-app.get('/api/admin/characters', auth, adminAuth, (req, res) => {
-  db.all('SELECT * FROM character_templates', (err, chars) => {
-    res.json(chars || []);
-  });
-});
-
-app.get('/api/admin/skills', auth, adminAuth, (req, res) => {
-  db.all('SELECT * FROM skills', (err, skills) => {
-    res.json(skills || []);
-  });
-});
-
-app.post('/api/admin/give-character', auth, adminAuth, (req, res) => {
-  const { userId, templateId } = req.body;
-  db.run('INSERT INTO user_characters (user_id, template_id, nickname) SELECT ?, ?, name FROM character_templates WHERE id = ?',
-    [userId, templateId, templateId], function(err) {
-    res.json({ message: 'Personagem dado ao jogador!' });
   });
 });
 
@@ -303,8 +450,43 @@ app.get('/api/admin/users', auth, adminAuth, (req, res) => {
 });
 
 app.post('/api/admin/ban/:userId', auth, adminAuth, (req, res) => {
-  db.run('UPDATE users SET is_banned = 1 WHERE id = ?', [req.params.userId]);
-  res.json({ message: 'Usuário banido' });
+  db.run('UPDATE users SET is_banned = 1 WHERE id = ?', [req.params.userId], () => {
+    res.json({ message: 'Usuário banido' });
+  });
+});
+
+app.post('/api/admin/unban/:userId', auth, adminAuth, (req, res) => {
+  db.run('UPDATE users SET is_banned = 0 WHERE id = ?', [req.params.userId], () => {
+    res.json({ message: 'Usuário desbanido' });
+  });
+});
+
+app.post('/api/admin/give-gold', auth, adminAuth, (req, res) => {
+  const { userId, amount } = req.body;
+  db.run('UPDATE users SET gold = gold + ? WHERE id = ?', [amount, userId], () => {
+    res.json({ message: `${amount} ouro dado!` });
+  });
+});
+
+app.post('/api/settings/change-password', auth, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  db.get('SELECT * FROM users WHERE id = ?', [req.user.id], async (err, user) => {
+    if (!await bcrypt.compare(oldPassword, user.password)) {
+      return res.status(401).json({ error: 'Senha atual incorreta' });
+    }
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    db.run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id], () => {
+      res.json({ message: 'Senha alterada com sucesso!' });
+    });
+  });
+});
+
+app.delete('/api/settings/delete-account', auth, (req, res) => {
+  db.run('DELETE FROM characters WHERE user_id = ?', [req.user.id]);
+  db.run('DELETE FROM friendships WHERE user_id = ? OR friend_id = ?', [req.user.id, req.user.id]);
+  db.run('DELETE FROM users WHERE id = ?', [req.user.id], () => {
+    res.json({ message: 'Conta deletada' });
+  });
 });
 
 io.on('connection', (socket) => {
