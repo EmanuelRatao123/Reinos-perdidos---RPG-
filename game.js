@@ -1,11 +1,38 @@
+(function(){const _0x1=console.log;console.log=function(){};console.warn=function(){};console.error=function(){};console.clear=function(){};Object.defineProperty(window,'user',{get:function(){return null},set:function(){}});Object.defineProperty(window,'token',{get:function(){return null},set:function(){}});})();
+
 let token=localStorage.getItem('token'),user=null,socket=io(),currentBattle=null,currentChar=null;
+
+async function checkBan(){
+const r=await fetch('/api/check-ban');
+const d=await r.json();
+if(d.banned){showBanScreen(d.reason,d.until);return true}
+return false
+}
+
+function showBanScreen(reason,until){
+const screen=document.getElementById('ban-screen');
+document.getElementById('ban-reason').textContent='Motivo: '+(reason||'Violação das regras');
+const date=new Date(until);
+const now=new Date();
+if(date>now){
+const hours=Math.ceil((date-now)/3600000);
+document.getElementById('ban-until').textContent=hours>8760?'Ban PERMANENTE':'Ban expira em: '+hours+' horas';
+}else{
+document.getElementById('ban-until').textContent='Ban PERMANENTE';
+}
+screen.classList.remove('hidden');
+document.getElementById('auth').classList.add('hidden');
+document.getElementById('game').classList.add('hidden');
+}
 
 async function api(e,m='GET',d=null){
 const o={method:m,headers:{'Content-Type':'application/json'}};
 if(token)o.headers.Authorization='Bearer '+token;
 if(d)o.body=JSON.stringify(d);
 const r=await fetch('/api'+e,o);
-return r.json();
+const j=await r.json();
+if(j.banned){showBanScreen(j.reason,j.until);throw new Error('Banned')}
+return j;
 }
 
 function msg(t,type='success'){
@@ -17,18 +44,23 @@ setTimeout(()=>d.remove(),4000);
 }
 
 async function register(){
+if(await checkBan())return;
 const u=document.getElementById('user').value,p=document.getElementById('pass').value;
 if(!u||!p)return msg('Preencha todos os campos','error');
+try{
 const r=await api('/register','POST',{username:u,password:p});
 if(r.token){
 token=r.token;user=r.user;localStorage.setItem('token',token);
-showGame();msg('✅ Conta criada com sucesso!')
+showGame();msg('✅ Conta criada! Pegue um personagem GRATUITO na loja!')
 }else msg(r.error,'error');
+}catch(e){if(e.message!=='Banned')msg('Erro ao registrar','error')}
 }
 
 async function login(){
+if(await checkBan())return;
 const u=document.getElementById('user').value,p=document.getElementById('pass').value;
 if(!u||!p)return msg('Preencha todos os campos','error');
+try{
 const r=await api('/login','POST',{username:u,password:p});
 if(r.token){
 token=r.token;user=r.user;localStorage.setItem('token',token);
@@ -37,6 +69,7 @@ document.getElementById('gold').textContent=user.gold||0;
 if(user.isAdmin)document.getElementById('admin-tab').classList.remove('hidden');
 showGame();loadChars();msg('✅ Bem-vindo, '+user.username+'!')
 }else msg(r.error,'error');
+}catch(e){if(e.message!=='Banned')msg('Erro ao fazer login','error')}
 }
 
 function showGame(){
@@ -59,18 +92,10 @@ if(t==='chat')loadChat();
 if(t==='admin')loadAdminData();
 }
 
-async function createChar(){
-const n=document.getElementById('char-name').value,c=document.getElementById('char-class').value;
-if(!n)return msg('Digite um nome','error');
-const r=await api('/characters/create','POST',{name:n,characterClass:c});
-if(r.message){msg('✅ '+r.message);loadChars()}
-else msg(r.error,'error');
-}
-
 async function loadChars(){
 const c=await api('/characters');
 const d=document.getElementById('my-chars');
-if(c.length===0){d.innerHTML='<p>Você não tem personagens. Crie um na aba "Criar"!</p>';return}
+if(c.length===0){d.innerHTML='<p>Você não tem personagens. Pegue um GRATUITO na loja!</p>';return}
 d.innerHTML=c.map(ch=>`<div class="card">
 <h3>${ch.name}</h3>
 <p><strong>${ch.class}</strong> | Nível ${ch.level}</p>
@@ -96,7 +121,7 @@ else msg(r.error,'error');
 async function loadPveChars(){
 const c=await api('/characters');
 const d=document.getElementById('pve-chars');
-if(c.length===0){d.innerHTML='<p>Crie um personagem primeiro!</p>';return}
+if(c.length===0){d.innerHTML='<p>Pegue um personagem GRATUITO na loja primeiro!</p>';return}
 d.innerHTML=c.map(ch=>`<button class="btn btn-primary" onclick="startPve(${ch.id},'${ch.name}')">
 ${ch.name} (${ch.class}) - Nível ${ch.level}
 </button>`).join('');
@@ -155,7 +180,7 @@ currentChar=null;
 async function loadPvpChars(){
 const c=await api('/characters');
 const d=document.getElementById('pvp-chars');
-if(c.length===0){d.innerHTML='<p>Crie um personagem primeiro!</p>';return}
+if(c.length===0){d.innerHTML='<p>Pegue um personagem na loja primeiro!</p>';return}
 d.innerHTML=c.map(ch=>`<button class="btn btn-primary" onclick="challengePlayer(${ch.id})">
 ${ch.name} (${ch.class}) - Nível ${ch.level}
 </button>`).join('');
@@ -201,6 +226,7 @@ if(s.length===0){d.innerHTML='<p>Loja vazia! Aguarde o admin adicionar itens.</p
 d.innerHTML=s.map(i=>`<div class="shop-item">
 <h3>${i.name}</h3>
 <p><strong>${i.class}</strong></p>
+<p style="font-size:0.9em;color:#ccc">${i.description||''}</p>
 <div class="stats">
 <div class="stat">❤️ ${i.hp}</div>
 <div class="stat">💙 ${i.mp}</div>
@@ -209,7 +235,7 @@ d.innerHTML=s.map(i=>`<div class="shop-item">
 <div class="stat">⚡ ${i.agi}</div>
 </div>
 <p style="color:#ffd700">💥 ${i.ultimate_name} (${i.ultimate_damage} dano)</p>
-<p style="color:#ffd700;font-size:1.3em">💰 ${i.price} ouro</p>
+<p style="color:${i.price===0?'#00ff00':'#ffd700'};font-size:1.5em;font-weight:bold">${i.price===0?'✨ GRATUITO ✨':'💰 '+i.price+' ouro'}</p>
 <button class="btn btn-primary" onclick="buyChar(${i.id})">Comprar</button>
 </div>`).join('');
 }
@@ -308,18 +334,33 @@ async function loadAdminData(){
 const u=await api('/admin/users');
 const d=document.getElementById('admin-users');
 d.innerHTML=u.map(us=>`<div class="card">
-<strong>${us.username}</strong> - 💰 ${us.gold} ouro
+<strong>${us.username}</strong> - 💰 ${us.gold} ouro ${us.is_banned?'<span style="color:#ff0000">(BANIDO)</span>':''}
 <div>
-<button class="btn btn-danger" onclick="banUser(${us.id})">Banir</button>
+<button class="btn btn-danger" onclick="banUserPrompt(${us.id},'${us.username}')">Banir</button>
 <button class="btn btn-warning" onclick="unbanUser(${us.id})">Desbanir</button>
 <button class="btn btn-primary" onclick="giveGold(${us.id})">Dar Ouro</button>
+<button class="btn btn-info" onclick="getUserIP(${us.id},'${us.username}')">Ver IP</button>
 </div>
 </div>`).join('');
+
+const ipBans=await api('/admin/ip-bans');
+const d2=document.getElementById('ip-bans');
+if(ipBans.length===0){d2.innerHTML='<p>Nenhum IP banido.</p>'}
+else{
+d2.innerHTML=ipBans.map(b=>`<div class="card">
+<strong>IP: ${b.ip}</strong><br>
+Motivo: ${b.reason}<br>
+Expira: ${new Date(b.banned_until).toLocaleString()}
+</div>`).join('');
+}
 }
 
-async function banUser(id){
-await api('/admin/ban/'+id,'POST');
-msg('✅ Usuário banido');
+async function banUserPrompt(id,username){
+const reason=prompt('Motivo do ban:','Violação das regras');
+if(!reason)return;
+const hours=prompt('Horas de ban (deixe vazio para permanente):','');
+await api('/admin/ban/'+id,'POST',{reason,hours:hours||null});
+msg('✅ '+username+' banido');
 loadAdminData();
 }
 
@@ -337,15 +378,28 @@ msg('✅ Ouro dado!');
 loadAdminData();
 }
 
+async function getUserIP(id,username){
+const ip=prompt('Digite o IP do usuário '+username+' para banir:');
+if(!ip)return;
+const reason=prompt('Motivo do ban:','Violação das regras');
+if(!reason)return;
+const hours=prompt('Horas de ban (deixe vazio para permanente):','');
+await api('/admin/ban-ip','POST',{ip,reason,hours:hours||null});
+msg('✅ IP '+ip+' banido');
+loadAdminData();
+}
+
 async function updateGold(){
 const r=await api('/login','POST',{username:user.username,password:''});
 if(r.user)document.getElementById('gold').textContent=r.user.gold;
 }
 
 setInterval(()=>{if(token)loadChat()},5000);
+socket.on('user_banned',d=>{if(user&&d.userId===user.id){localStorage.removeItem('token');location.reload()}});
 socket.on('pvp_challenge',d=>{if(user&&d.toId===user.id)msg('⚔️ '+d.from+' te desafiou!','error')});
 socket.on('global_message',()=>loadChat());
 
+checkBan();
 if(token){
 api('/login','POST',{username:'',password:''}).then(r=>{
 if(r.user){
@@ -357,5 +411,5 @@ showGame();
 }else{
 localStorage.removeItem('token');
 }
-});
+}).catch(()=>localStorage.removeItem('token'));
 }

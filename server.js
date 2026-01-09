@@ -17,6 +17,7 @@ const ADMIN_USER = process.env.ADMIN_USER || 'Emanuel';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'Rato123';
 
 const loginAttempts = new Map();
+const bannedIPs = new Map();
 
 app.use(cors());
 app.use(express.json());
@@ -34,6 +35,16 @@ db.serialize(() => {
     gold INTEGER DEFAULT 500,
     is_admin BOOLEAN DEFAULT 0,
     is_banned BOOLEAN DEFAULT 0,
+    ban_reason TEXT,
+    ban_until DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS ip_bans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT UNIQUE NOT NULL,
+    reason TEXT,
+    banned_until DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -117,6 +128,14 @@ db.serialize(() => {
     winner_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  db.run(`INSERT OR IGNORE INTO shop_items (name, class, price, hp, mp, str, int, agi, ultimate_name, ultimate_damage, ultimate_mp_cost, description, duration_hours) VALUES
+    ('Guerreiro Iniciante', 'Guerreiro', 0, 150, 50, 20, 10, 12, 'Fúria de Batalha', 80, 30, 'Guerreiro básico GRATUITO', 999999),
+    ('Mago Iniciante', 'Mago', 0, 100, 150, 10, 25, 15, 'Explosão Arcana', 100, 40, 'Mago básico GRATUITO', 999999),
+    ('Arqueiro Iniciante', 'Arqueiro', 0, 120, 80, 15, 12, 25, 'Flecha Perfurante', 90, 35, 'Arqueiro básico GRATUITO', 999999),
+    ('Paladino Sagrado', 'Paladino', 2500, 200, 100, 25, 20, 15, 'Julgamento Divino', 120, 50, 'Guerreiro sagrado lendário', 24),
+    ('Necromante', 'Necromante', 3000, 120, 200, 12, 35, 18, 'Exército dos Mortos', 150, 60, 'Mestre das trevas', 24),
+    ('Assassino', 'Assassino', 2800, 140, 90, 22, 15, 35, 'Golpe das Sombras', 140, 45, 'Mestre da furtividade', 24)`);
 });
 
 const auth = (req, res, next) => {
@@ -135,6 +154,12 @@ const adminAuth = (req, res, next) => {
 };
 
 app.post('/api/register', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const ipBan = await new Promise(resolve => {
+    db.get('SELECT * FROM ip_bans WHERE ip = ? AND datetime(banned_until) > datetime("now")', [ip], (err, row) => resolve(row));
+  });
+  if (ipBan) return res.status(403).json({ banned: true, reason: ipBan.reason, until: ipBan.banned_until });
+  
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Dados obrigatórios' });
   const cleanUser = sanitize(username);
@@ -149,6 +174,12 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   const ip = req.ip || req.connection.remoteAddress;
+  
+  const ipBan = await new Promise(resolve => {
+    db.get('SELECT * FROM ip_bans WHERE ip = ? AND datetime(banned_until) > datetime("now")', [ip], (err, row) => resolve(row));
+  });
+  if (ipBan) return res.status(403).json({ banned: true, reason: ipBan.reason, until: ipBan.banned_until });
+  
   const attempts = loginAttempts.get(ip) || { count: 0, lastAttempt: Date.now() };
   if (attempts.count >= 5 && Date.now() - attempts.lastAttempt < 300000) {
     return res.status(429).json({ error: 'Muitas tentativas. Aguarde 5 minutos.' });
@@ -181,31 +212,17 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
     loginAttempts.delete(ip);
-    if (user.is_banned) return res.status(403).json({ error: 'Usuário banido' });
+    if (user.is_banned) {
+      const banActive = user.ban_until && new Date(user.ban_until) > new Date();
+      if (banActive) {
+        return res.status(403).json({ banned: true, reason: user.ban_reason, until: user.ban_until });
+      } else {
+        db.run('UPDATE users SET is_banned = 0, ban_reason = NULL, ban_until = NULL WHERE id = ?', [user.id]);
+      }
+    }
     const token = jwt.sign({ id: user.id, username: user.username, isAdmin: user.is_admin }, JWT_SECRET);
     res.json({ token, user: { id: user.id, username: user.username, isAdmin: user.is_admin, gold: user.gold } });
   });
-});
-
-app.post('/api/characters/create', auth, (req, res) => {
-  const { name, characterClass } = req.body;
-  const cleanName = sanitize(name);
-  let stats = {};
-  if (characterClass === 'Guerreiro') {
-    stats = { hp: 150, mp: 50, str: 20, int: 10, agi: 12, ult: 'Fúria de Batalha', ultDmg: 80, ultMp: 30 };
-  } else if (characterClass === 'Mago') {
-    stats = { hp: 100, mp: 150, str: 10, int: 25, agi: 15, ult: 'Explosão Arcana', ultDmg: 100, ultMp: 40 };
-  } else if (characterClass === 'Arqueiro') {
-    stats = { hp: 120, mp: 80, str: 15, int: 12, agi: 25, ult: 'Flecha Perfurante', ultDmg: 90, ultMp: 35 };
-  }
-  
-  db.run(`INSERT INTO characters (user_id, name, class, hp, max_hp, mp, max_mp, str, int, agi, ultimate_name, ultimate_damage, ultimate_mp_cost) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [req.user.id, cleanName, characterClass, stats.hp, stats.hp, stats.mp, stats.mp, stats.str, stats.int, stats.agi, stats.ult, stats.ultDmg, stats.ultMp],
-    function(err) {
-      if (err) return res.status(500).json({ error: 'Erro ao criar personagem' });
-      res.json({ message: 'Personagem criado!', charId: this.lastID });
-    });
 });
 
 app.get('/api/characters', auth, (req, res) => {
@@ -444,20 +461,54 @@ app.post('/api/admin/shop/add', auth, adminAuth, (req, res) => {
 });
 
 app.get('/api/admin/users', auth, adminAuth, (req, res) => {
-  db.all('SELECT id, username, gold, is_banned FROM users WHERE is_admin = 0', (err, users) => {
+  db.all('SELECT id, username, gold, is_banned, ban_reason, ban_until FROM users WHERE is_admin = 0', (err, users) => {
     res.json(users || []);
   });
 });
 
+app.get('/api/user-ip', auth, (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  res.json({ ip });
+});
+
 app.post('/api/admin/ban/:userId', auth, adminAuth, (req, res) => {
-  db.run('UPDATE users SET is_banned = 1 WHERE id = ?', [req.params.userId], () => {
-    res.json({ message: 'Usuário banido' });
+  const { reason, hours } = req.body;
+  const banUntil = hours ? `datetime('now', '+${hours} hours')` : `datetime('now', '+999 years')`;
+  db.get('SELECT username FROM users WHERE id = ?', [req.params.userId], (err, user) => {
+    db.run(`UPDATE users SET is_banned = 1, ban_reason = ?, ban_until = ${banUntil} WHERE id = ?`, 
+      [reason || 'Violação das regras', req.params.userId], () => {
+      io.emit('user_banned', { userId: parseInt(req.params.userId), username: user.username });
+      res.json({ message: 'Usuário banido' });
+    });
   });
 });
 
 app.post('/api/admin/unban/:userId', auth, adminAuth, (req, res) => {
-  db.run('UPDATE users SET is_banned = 0 WHERE id = ?', [req.params.userId], () => {
+  db.run('UPDATE users SET is_banned = 0, ban_reason = NULL, ban_until = NULL WHERE id = ?', [req.params.userId], () => {
     res.json({ message: 'Usuário desbanido' });
+  });
+});
+
+app.post('/api/admin/ban-ip', auth, adminAuth, (req, res) => {
+  const { ip, reason, hours } = req.body;
+  const banUntil = hours ? `datetime('now', '+${hours} hours')` : `datetime('now', '+999 years')`;
+  db.run(`INSERT OR REPLACE INTO ip_bans (ip, reason, banned_until) VALUES (?, ?, ${banUntil})`,
+    [ip, reason || 'Violação das regras'], () => {
+    res.json({ message: 'IP banido' });
+  });
+});
+
+app.get('/api/admin/ip-bans', auth, adminAuth, (req, res) => {
+  db.all('SELECT * FROM ip_bans WHERE datetime(banned_until) > datetime("now")', (err, bans) => {
+    res.json(bans || []);
+  });
+});
+
+app.get('/api/check-ban', (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  db.get('SELECT * FROM ip_bans WHERE ip = ? AND datetime(banned_until) > datetime("now")', [ip], (err, ban) => {
+    if (ban) return res.json({ banned: true, reason: ban.reason, until: ban.banned_until });
+    res.json({ banned: false });
   });
 });
 

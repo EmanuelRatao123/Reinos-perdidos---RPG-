@@ -52,6 +52,13 @@ body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0a0a0a
 .shop-item{background:linear-gradient(135deg,rgba(255,215,0,0.2),rgba(255,140,0,0.1));padding:15px;border-radius:12px;border:2px solid #ffd700;text-align:center}
 .shop-item h3{color:#ffd700;margin-bottom:8px;font-size:1.1em}
 .admin-panel{background:linear-gradient(135deg,rgba(138,43,226,0.3),rgba(75,0,130,0.2));padding:20px;border-radius:15px;border:2px solid #8a2be2}
+.ban-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.98);z-index:9999;display:flex;align-items:center;justify-content:center;animation:banAppear 0.5s}
+@keyframes banAppear{from{opacity:0}to{opacity:1}}
+.ban-content{text-align:center;padding:40px;max-width:600px;background:linear-gradient(135deg,#8B0000,#DC143C);border-radius:20px;border:5px solid #ff0000;box-shadow:0 0 100px rgba(255,0,0,0.8);animation:shake 0.5s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+.ban-content h1{font-size:4em;color:#fff;text-shadow:0 0 20px #ff0000;margin-bottom:20px;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.ban-content p{font-size:1.5em;margin:15px 0;color:#fff}
 @media (max-width:768px){
 .header h1{font-size:1.5em}
 .tabs{gap:3px}
@@ -59,10 +66,21 @@ body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0a0a0a
 .grid{grid-template-columns:1fr}
 .stats{grid-template-columns:repeat(2,1fr)}
 .btn{padding:8px 15px;font-size:0.85em}
+.ban-content h1{font-size:2.5em}
+.ban-content p{font-size:1.2em}
 }
 </style>
 </head>
 <body>
+<div id="ban-screen" class="ban-screen hidden">
+<div class="ban-content">
+<h1>🚫 BANIDO 🚫</h1>
+<p id="ban-reason"></p>
+<p id="ban-until"></p>
+<p style="font-size:1em;margin-top:30px;color:#ffcccc">Contate um administrador se achar que isso é um erro.</p>
+</div>
+</div>
+
 <div class="container">
 <div class="header">
 <h1>⚔️ REINOS PERDIDOS ⚔️</h1>
@@ -85,10 +103,9 @@ body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0a0a0a
 <div id="game" class="hidden">
 <div class="tabs">
 <div class="tab active" onclick="showTab('personagens')">👤 Personagens</div>
-<div class="tab" onclick="showTab('criar')">➕ Criar</div>
+<div class="tab" onclick="showTab('loja')">🛒 Loja</div>
 <div class="tab" onclick="showTab('pve')">🐉 PvE</div>
 <div class="tab" onclick="showTab('pvp')">⚔️ PvP</div>
-<div class="tab" onclick="showTab('loja')">🛒 Loja</div>
 <div class="tab" onclick="showTab('amigos')">👥 Amigos</div>
 <div class="tab" onclick="showTab('chat')">💬 Chat</div>
 <div class="tab" onclick="showTab('config')">⚙️ Config</div>
@@ -100,23 +117,10 @@ body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0a0a0a
 <div id="my-chars" class="grid"></div>
 </div>
 
-<div id="tab-criar" class="tab-content">
-<h2>➕ Criar Personagem</h2>
-<div class="card">
-<div class="form-group">
-<label>Nome do Personagem</label>
-<input type="text" id="char-name" placeholder="Digite o nome">
-</div>
-<div class="form-group">
-<label>Classe</label>
-<select id="char-class">
-<option value="Guerreiro">⚔️ Guerreiro (HP+, STR+) - Ultimate: Fúria de Batalha</option>
-<option value="Mago">🔮 Mago (MP+, INT+) - Ultimate: Explosão Arcana</option>
-<option value="Arqueiro">🏹 Arqueiro (AGI+) - Ultimate: Flecha Perfurante</option>
-</select>
-</div>
-<button class="btn btn-primary" onclick="createChar()">Criar Personagem</button>
-</div>
+<div id="tab-loja" class="tab-content">
+<h2>🛒 Loja de Personagens</h2>
+<p style="color:#ffd700;font-size:1.1em">✨ 3 Personagens GRATUITOS disponíveis! ✨</p>
+<div id="shop-items" class="grid"></div>
 </div>
 
 <div id="tab-pve" class="tab-content">
@@ -169,12 +173,6 @@ body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0a0a0a
 <h3>Desafios Recebidos</h3>
 <div id="pvp-challenges"></div>
 </div>
-</div>
-
-<div id="tab-loja" class="tab-content">
-<h2>🛒 Loja de Personagens</h2>
-<p style="color:#ffd700">Personagens especiais criados pelo admin!</p>
-<div id="shop-items" class="grid"></div>
 </div>
 
 <div id="tab-amigos" class="tab-content">
@@ -253,6 +251,10 @@ body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0a0a0a
 <div class="card">
 <h3>👥 Gerenciar Usuários</h3>
 <div id="admin-users"></div>
+</div>
+<div class="card">
+<h3>🚫 Bans por IP</h3>
+<div id="ip-bans"></div>
 </div>
 </div>
 </div>
