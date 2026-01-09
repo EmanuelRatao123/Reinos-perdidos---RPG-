@@ -67,7 +67,7 @@ token=r.token;user=r.user;localStorage.setItem('token',token);
 document.getElementById('username').textContent=user.username;
 document.getElementById('gold').textContent=user.gold||0;
 if(user.isAdmin)document.getElementById('admin-tab').classList.remove('hidden');
-showGame();loadChars();msg('✅ Bem-vindo, '+user.username+'!')
+showGame();loadChars();loadShop();msg('✅ Bem-vindo, '+user.username+'!')
 }else msg(r.error,'error');
 }catch(e){if(e.message!=='Banned')msg('Erro ao fazer login','error')}
 }
@@ -390,8 +390,9 @@ loadAdminData();
 }
 
 async function updateGold(){
-const r=await api('/login','POST',{username:user.username,password:''});
-if(r.user)document.getElementById('gold').textContent=r.user.gold;
+const r=await fetch('/api/user-ip',{headers:{'Authorization':'Bearer '+token}});
+const d=await r.json();
+if(user)document.getElementById('gold').textContent=user.gold;
 }
 
 setInterval(()=>{if(token)loadChat()},5000);
@@ -399,17 +400,8 @@ socket.on('user_banned',d=>{if(user&&d.userId===user.id){localStorage.removeItem
 socket.on('pvp_challenge',d=>{if(user&&d.toId===user.id)msg('⚔️ '+d.from+' te desafiou!','error')});
 socket.on('global_message',()=>loadChat());
 
-checkBan();
-if(token){
-api('/login','POST',{username:'',password:''}).then(r=>{
-if(r.user){
-user=r.user;
-document.getElementById('username').textContent=user.username;
-document.getElementById('gold').textContent=user.gold;
-if(user.isAdmin)document.getElementById('admin-tab').classList.remove('hidden');
+checkBan().then(banned=>{
+if(!banned&&token){
 showGame();
-}else{
-localStorage.removeItem('token');
 }
-}).catch(()=>localStorage.removeItem('token'));
-}
+});
