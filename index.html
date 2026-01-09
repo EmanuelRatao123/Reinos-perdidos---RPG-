@@ -1,51 +1,143 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚔️ Reinos Perdidos - RPG Online</title>
-    <script src="/socket.io/socket.io.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚔️ Reinos Perdidos V2</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:linear-gradient(135deg,#0a0a0a,#1a1a2e,#16213e);color:#fff;min-height:100vh;overflow-x:hidden}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+.header{text-align:center;padding:30px;background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(255,140,0,0.1));border-radius:20px;margin-bottom:20px;box-shadow:0 10px 40px rgba(255,215,0,0.3)}
+.header h1{font-size:3.5em;background:linear-gradient(45deg,#ffd700,#ff8c00,#ffd700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:glow 2s infinite;text-shadow:0 0 30px rgba(255,215,0,0.5)}
+@keyframes glow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
+.tabs{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap;justify-content:center}
+.tab{padding:15px 30px;background:linear-gradient(135deg,rgba(255,255,255,0.1),rgba(255,255,255,0.05));border:2px solid rgba(255,215,0,0.3);border-radius:15px;cursor:pointer;transition:all 0.3s;font-weight:bold;font-size:1.1em}
+.tab:hover{transform:translateY(-3px);border-color:#ffd700;box-shadow:0 5px 20px rgba(255,215,0,0.4)}
+.tab.active{background:linear-gradient(135deg,#ffd700,#ff8c00);border-color:#ffd700;color:#000}
+.tab-content{display:none;animation:fadeIn 0.5s}
+.tab-content.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.card{background:linear-gradient(135deg,rgba(255,255,255,0.1),rgba(255,255,255,0.05));padding:25px;border-radius:20px;margin:15px 0;border:2px solid rgba(255,215,0,0.2);transition:all 0.3s;box-shadow:0 5px 20px rgba(0,0,0,0.3)}
+.card:hover{transform:translateY(-5px);border-color:rgba(255,215,0,0.6);box-shadow:0 10px 30px rgba(255,215,0,0.3)}
+.btn{padding:12px 25px;border:none;border-radius:10px;cursor:pointer;font-weight:bold;margin:5px;transition:all 0.3s;font-size:1em;text-transform:uppercase}
+.btn-primary{background:linear-gradient(45deg,#4CAF50,#45a049);color:#fff}
+.btn-danger{background:linear-gradient(45deg,#f44336,#d32f2f);color:#fff}
+.btn-warning{background:linear-gradient(45deg,#ff9800,#f57c00);color:#fff}
+.btn:hover{transform:scale(1.05);box-shadow:0 5px 15px rgba(0,0,0,0.4)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+.form-group{margin:15px 0}
+.form-group label{display:block;margin-bottom:8px;color:#ffd700;font-weight:bold}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:12px;border:2px solid rgba(255,255,255,0.2);border-radius:10px;background:rgba(255,255,255,0.1);color:#fff;font-size:1em}
+.form-group input:focus{outline:none;border-color:#ffd700}
+.hidden{display:none}
+.message{padding:15px;margin:10px 0;border-radius:10px;animation:slideIn 0.3s}
+@keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+.success{background:rgba(76,175,80,0.4);border-left:4px solid #4CAF50}
+.error{background:rgba(244,67,54,0.4);border-left:4px solid #f44336}
+.shop-item{background:linear-gradient(135deg,rgba(255,215,0,0.2),rgba(255,140,0,0.1));padding:20px;border-radius:15px;border:2px solid #ffd700;text-align:center}
+.shop-item h3{color:#ffd700;margin-bottom:10px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:15px 0}
+.stat{background:rgba(0,0,0,0.4);padding:10px;border-radius:8px;text-align:center;border:1px solid rgba(255,215,0,0.3)}
+.chat-box{height:400px;overflow-y:auto;background:rgba(0,0,0,0.4);padding:15px;border-radius:10px;margin:15px 0}
+.chat-msg{padding:10px;margin:5px 0;border-radius:8px;background:rgba(255,255,255,0.1)}
+.admin-panel{background:linear-gradient(135deg,rgba(138,43,226,0.3),rgba(75,0,130,0.2));padding:30px;border-radius:20px;border:2px solid #8a2be2}
+</style>
 </head>
 <body>
-<script>document.write('<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);color:#fff;min-height:100vh}.container{max-width:1400px;margin:0 auto;padding:20px}.header{text-align:center;margin-bottom:30px;padding:30px;background:rgba(255,255,255,.05);border-radius:20px}.header h1{font-size:4em;background:linear-gradient(45deg,#ffd700,#ffed4e,#ffd700);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:glow 2s ease-in-out infinite}@keyframes glow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3)}}.auth-form,.game-section,.panel{background:rgba(255,255,255,.08);padding:30px;border-radius:20px;margin:20px 0;border:1px solid rgba(255,255,255,.1);box-shadow:0 8px 32px rgba(0,0,0,.3)}.form-group{margin:15px 0}.form-group label{display:block;margin-bottom:8px;color:#ffd700;font-weight:700}.form-group input,.form-group select,.form-group textarea{width:100%;padding:14px;border:2px solid rgba(255,255,255,.2);border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font-size:16px;transition:all .3s}.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:0;border-color:#ffd700;background:rgba(255,255,255,.15)}.btn{padding:14px 28px;border:none;border-radius:10px;cursor:pointer;font-weight:700;margin:5px;transition:all .3s;font-size:16px;text-transform:uppercase;letter-spacing:1px}.btn-primary{background:linear-gradient(45deg,#4caf50,#45a049);color:#fff}.btn-secondary{background:linear-gradient(45deg,#2196f3,#1976d2);color:#fff}.btn-danger{background:linear-gradient(45deg,#f44336,#d32f2f);color:#fff}.btn-warning{background:linear-gradient(45deg,#ff9800,#f57c00);color:#fff}.btn-special{background:linear-gradient(45deg,#9c27b0,#7b1fa2);color:#fff}.btn:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(0,0,0,.4)}.character-card{background:linear-gradient(135deg,rgba(255,255,255,.1),rgba(255,255,255,.05));padding:25px;border-radius:15px;margin:15px 0;border:2px solid rgba(255,215,0,.3);transition:all .3s}.character-card:hover{transform:translateY(-5px);border-color:rgba(255,215,0,.6);box-shadow:0 10px 30px rgba(255,215,0,.2)}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:15px 0}.stat{background:rgba(0,0,0,.3);padding:12px;border-radius:8px;text-align:center;border:1px solid rgba(255,255,255,.1);font-weight:700}.battle-area{background:linear-gradient(135deg,rgba(255,0,0,.15),rgba(139,0,0,.15));padding:25px;border-radius:15px;margin:20px 0;border:2px solid rgba(255,0,0,.3)}.chat-area{background:linear-gradient(135deg,rgba(0,255,0,.1),rgba(0,139,0,.1));padding:25px;border-radius:15px;border:2px solid rgba(0,255,0,.3)}.pvp-area{background:linear-gradient(135deg,rgba(255,165,0,.15),rgba(255,140,0,.15));padding:25px;border-radius:15px;border:2px solid rgba(255,165,0,.3)}.admin-panel{background:linear-gradient(135deg,rgba(138,43,226,.2),rgba(75,0,130,.2));padding:30px;border-radius:15px;border:2px solid rgba(138,43,226,.5)}.hidden{display:none}.message{padding:15px;margin:10px 0;border-radius:10px;animation:slideIn .3s ease-out}@keyframes slideIn{from{transform:translateX(-100%);opacity:0}to{transform:translateX(0);opacity:1}}.success{background:rgba(76,175,80,.4);border-left:4px solid #4caf50}.error{background:rgba(244,67,54,.4);border-left:4px solid #f44336}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:20px}.chat-messages{height:300px;overflow-y:auto;background:rgba(0,0,0,.3);padding:15px;border-radius:10px;margin:15px 0}.chat-message{padding:10px;margin:8px 0;border-radius:8px;background:rgba(255,255,255,.1)}.player-list{max-height:400px;overflow-y:auto}.player-card{background:rgba(255,255,255,.08);padding:15px;margin:10px 0;border-radius:10px;border:1px solid rgba(255,255,255,.2);transition:all .3s}.player-card:hover{background:rgba(255,255,255,.12);transform:translateX(5px)}::-webkit-scrollbar{width:10px}::-webkit-scrollbar-track{background:rgba(0,0,0,.3)}::-webkit-scrollbar-thumb{background:rgba(255,215,0,.5);border-radius:5px}</style>');</script>
 <div class="container">
-<div class="header"><h1>⚔️ REINOS PERDIDOS ⚔️</h1><p style="font-size:1.2em;color:#ffd700">RPG de Mesa Online Multiplayer</p></div>
-<div id="auth-section">
-<div class="auth-form">
-<h2 style="text-align:center;margin-bottom:20px">🏰 Entrar no Reino</h2>
-<div class="form-group"><label>👤 Usuário:</label><input type="text" id="username" placeholder="Digite seu nome de usuário"></div>
-<div class="form-group"><label>🔒 Senha:</label><input type="password" id="password" placeholder="Digite sua senha"></div>
-<div style="text-align:center"><button class="btn btn-primary" onclick="login()">Entrar</button></div>
-<p style="text-align:center;margin-top:15px;color:#ffd700">Não tem uma conta? <a href="#" onclick="showRegister();return false" style="color:#4CAF50;text-decoration:none;font-weight:bold">Cadastre-se!</a></p>
-<p style="text-align:center;margin-top:5px"><a href="#" onclick="showRecover();return false" style="color:#ff9800;text-decoration:none;font-size:0.9em">Esqueceu a senha?</a></p>
+<div class="header">
+<h1>⚔️ REINOS PERDIDOS V2 ⚔️</h1>
+<p style="font-size:1.3em;color:#ffd700">RPG Profissional Online</p>
+<p id="user-info" class="hidden">Bem-vindo, <span id="username"></span> | 💰 <span id="gold">0</span> ouro</p>
 </div>
-<div class="auth-form hidden" id="register-form">
-<h2 style="text-align:center;margin-bottom:20px">📝 Criar Conta</h2>
-<div class="form-group"><label>👤 Usuário:</label><input type="text" id="reg-username" placeholder="Escolha um nome de usuário"></div>
-<div class="form-group"><label>📧 Email (opcional):</label><input type="email" id="reg-email" placeholder="seu@email.com"></div>
-<div class="form-group"><label>🔒 Senha:</label><input type="password" id="reg-password" placeholder="Escolha uma senha"></div>
-<div style="text-align:center"><button class="btn btn-primary" onclick="register()">Criar Conta</button></div>
-<p style="text-align:center;margin-top:15px;color:#ffd700">Já tem uma conta? <a href="#" onclick="showLogin();return false" style="color:#2196F3;text-decoration:none;font-weight:bold">Entrar</a></p>
-</div>
-<div class="auth-form hidden" id="recover-form">
-<h2 style="text-align:center;margin-bottom:20px">🔑 Recuperar Conta</h2>
-<div class="form-group"><label>👤 Usuário:</label><input type="text" id="rec-username" placeholder="Seu nome de usuário"></div>
-<div class="form-group"><label>🎫 Código de Recuperação:</label><input type="text" id="rec-code" placeholder="Código que você recebeu" style="text-transform:uppercase"></div>
-<div class="form-group"><label>🔒 Nova Senha:</label><input type="password" id="rec-password" placeholder="Digite sua nova senha"></div>
-<div style="text-align:center"><button class="btn btn-primary" onclick="recoverAccount()">Recuperar Conta</button></div>
-<p style="text-align:center;margin-top:15px"><a href="#" onclick="showLogin();return false" style="color:#2196F3;text-decoration:none">Voltar ao login</a></p>
+
+<div id="auth" class="card">
+<h2 style="text-align:center">🏰 Login</h2>
+<div class="form-group"><input type="text" id="user" placeholder="Usuário"></div>
+<div class="form-group"><input type="password" id="pass" placeholder="Senha"></div>
+<div style="text-align:center">
+<button class="btn btn-primary" onclick="login()">Entrar</button>
+<button class="btn btn-warning" onclick="register()">Registrar</button>
 </div>
 </div>
-<div id="game-section" class="hidden"><div class="game-section"><h2>Bem-vindo, <span id="player-name" style="color:#ffd700"></span>! <span id="admin-badge" class="hidden" style="background:purple;padding:5px 10px;border-radius:5px;font-size:14px">👑 ADMIN</span></h2><button class="btn btn-danger" onclick="logout()">Sair</button> <button id="admin-btn" class="btn btn-warning hidden" onclick="toggleAdmin()">Painel Admin</button></div>
-<div id="admin-panel" class="admin-panel hidden"><h2>👑 PAINEL DE ADMINISTRAÇÃO</h2><div class="grid"><div class="panel"><h3>👥 Usuários</h3><div id="admin-users-list"></div><button class="btn btn-secondary" onclick="loadAdminUsers()">Atualizar</button></div><div class="panel"><h3>⚔️ Personagens</h3><div id="admin-chars-list"></div><button class="btn btn-secondary" onclick="loadAdminChars()">Atualizar</button></div></div><div class="panel" style="margin-top:20px"><h3>🎫 Criar Código Promocional</h3><div class="form-group"><label>Código:</label><input type="text" id="admin-code" placeholder="Ex: BEMVINDO2024" style="text-transform:uppercase"></div><div class="form-group"><label>Tipo:</label><select id="admin-code-type"><option value="gold">Ouro</option><option value="exp">Experiência</option><option value="level">Níveis</option></select></div><div class="form-group"><label>Valor:</label><input type="number" id="admin-code-value" placeholder="Ex: 1000"></div><div class="form-group"><label>Usos Máximos:</label><input type="number" id="admin-code-uses" placeholder="999" value="999"></div><button class="btn btn-primary" onclick="createPromoCode()">Criar Código</button><h4 style="margin-top:20px">Códigos Ativos:</h4><div id="admin-codes-list"></div><button class="btn btn-secondary" onclick="loadAdminCodes()">Atualizar</button></div></div>
-<div class="grid"><div class="game-section"><h3>🧙♂️ Criar Personagem</h3><div class="form-group"><label>Nome:</label><input type="text" id="char-name" placeholder="Nome do personagem"></div><div class="form-group"><label>Classe:</label><select id="char-class"><option value="Guerreiro">⚔️ Guerreiro - Fúria de Batalha</option><option value="Mago">🔮 Mago - Explosão Arcana</option><option value="Arqueiro">🏹 Arqueiro - Flecha Perfurante</option></select></div><button class="btn btn-primary" onclick="createCharacter()">Criar Personagem</button></div><div class="game-section"><h3>🎫 Resgatar Código</h3><div class="form-group"><input type="text" id="promo-code" placeholder="Digite o código promocional" style="text-transform:uppercase"><button class="btn btn-primary" onclick="redeemCode()">Resgatar</button></div><p style="color:#ffd700;font-size:0.9em">🎁 Use códigos para ganhar ouro, EXP ou níveis!</p></div><div class="game-section"><h3>🎮 Seus Personagens</h3><div class="form-group"><label>Nome:</label><input type="text" id="char-name" placeholder="Nome do personagem"></div><div class="form-group"><label>Classe:</label><select id="char-class"><option value="Guerreiro">⚔️ Guerreiro - Fúria de Batalha</option><option value="Mago">🔮 Mago - Explosão Arcana</option><option value="Arqueiro">🏹 Arqueiro - Flecha Perfurante</option></select></div><button class="btn btn-primary" onclick="createCharacter()">Criar Personagem</button></div><div class="game-section"><h3>👥 Seus Personagens</h3><div id="characters-list"></div><button class="btn btn-secondary" onclick="loadCharacters()">Atualizar</button></div></div>
-<div id="battle-section" class="battle-area hidden"><h3>⚔️ ARENA DE BATALHA</h3><div id="battle-info"></div><div style="margin:20px 0"><button class="btn btn-danger" onclick="battle('attack')">🗡️ Atacar</button><button class="btn btn-primary" onclick="battle('magic')">✨ Magia (-10 MP)</button><button class="btn btn-secondary" onclick="battle('defend')">🛡️ Defender</button><button class="btn btn-special" onclick="battle('special')">⚡ Poder Especial (-30 MP)</button></div><div id="battle-result"></div></div>
-<div class="pvp-area"><h3>⚔️ BATALHA PvP - Desafiar Jogadores</h3><div class="player-list" id="online-players"></div><button class="btn btn-warning" onclick="loadOnlinePlayers()">Atualizar Jogadores</button></div>
-<div class="chat-area"><h3>💬 Chat Global</h3><div class="chat-messages" id="global-chat"></div><div class="form-group"><input type="text" id="global-chat-input" placeholder="Digite sua mensagem..." onkeypress="if(event.key==='Enter')sendGlobalMessage()"><button class="btn btn-primary" onclick="sendGlobalMessage()">Enviar</button></div></div>
-<div class="grid"><div class="game-section"><h3>👫 Amigos</h3><div class="form-group"><input type="text" id="friend-username" placeholder="Nome do usuário"><button class="btn btn-primary" onclick="addFriend()">Adicionar</button></div><div id="friends-list"></div><button class="btn btn-secondary" onclick="loadFriends()">Atualizar</button></div><div class="chat-area"><h3>💬 Chat</h3><div class="form-group"><select id="chat-friend-select"><option value="">Selecione um amigo</option></select></div><div class="chat-messages" id="chat-messages"></div><div class="form-group"><textarea id="chat-input" rows="2" placeholder="Digite sua mensagem..."></textarea><button class="btn btn-primary" onclick="sendMessage()">Enviar</button></div></div></div>
+
+<div id="game" class="hidden">
+<div class="tabs">
+<div class="tab active" onclick="showTab('personagens')">👤 Personagens</div>
+<div class="tab" onclick="showTab('loja')">🛒 Loja</div>
+<div class="tab" onclick="showTab('batalha')">⚔️ Batalha</div>
+<div class="tab" onclick="showTab('chat')">💬 Chat</div>
+<div class="tab hidden" id="admin-tab" onclick="showTab('admin')">👑 Admin</div>
 </div>
+
+<div id="tab-personagens" class="tab-content active">
+<h2>👤 Meus Personagens</h2>
+<div id="my-chars" class="grid"></div>
+</div>
+
+<div id="tab-loja" class="tab-content">
+<h2>🛒 Loja (Atualiza a cada 24h)</h2>
+<div id="shop-items" class="grid"></div>
+</div>
+
+<div id="tab-batalha" class="tab-content">
+<h2>⚔️ Arena de Batalha</h2>
+<div id="battle-requests"></div>
+<button class="btn btn-warning" onclick="loadBattleRequests()">Atualizar Desafios</button>
+</div>
+
+<div id="tab-chat" class="tab-content">
+<h2>💬 Chat Global</h2>
+<div class="chat-box" id="chat"></div>
+<div class="form-group">
+<input type="text" id="chat-input" placeholder="Digite sua mensagem..." onkeypress="if(event.key==='Enter')sendChat()">
+<button class="btn btn-primary" onclick="sendChat()">Enviar</button>
+</div>
+</div>
+
+<div id="tab-admin" class="tab-content">
+<div class="admin-panel">
+<h2>👑 PAINEL ADMIN</h2>
+<div class="grid">
+<div class="card">
+<h3>➕ Criar Personagem</h3>
+<div class="form-group"><input type="text" id="a-name" placeholder="Nome"></div>
+<div class="form-group"><input type="text" id="a-class" placeholder="Classe"></div>
+<div class="form-group"><input type="number" id="a-hp" placeholder="HP" value="100"></div>
+<div class="form-group"><input type="number" id="a-mp" placeholder="MP" value="50"></div>
+<div class="form-group"><input type="number" id="a-str" placeholder="STR" value="10"></div>
+<div class="form-group"><input type="number" id="a-int" placeholder="INT" value="10"></div>
+<div class="form-group"><input type="number" id="a-agi" placeholder="AGI" value="10"></div>
+<div class="form-group"><input type="number" id="a-price" placeholder="Preço" value="1000"></div>
+<button class="btn btn-primary" onclick="createChar()">Criar</button>
+</div>
+<div class="card">
+<h3>⚡ Criar Skill</h3>
+<div class="form-group"><input type="text" id="s-name" placeholder="Nome da Skill"></div>
+<div class="form-group"><input type="number" id="s-dmg" placeholder="Dano" value="50"></div>
+<div class="form-group"><input type="number" id="s-mp" placeholder="Custo MP" value="20"></div>
+<div class="form-group"><input type="number" id="s-cd" placeholder="Cooldown" value="2"></div>
+<button class="btn btn-primary" onclick="createSkill()">Criar</button>
+</div>
+<div class="card">
+<h3>🛒 Adicionar à Loja</h3>
+<div class="form-group"><select id="shop-char"></select></div>
+<div class="form-group"><input type="number" id="shop-duration" placeholder="Horas na loja" value="24"></div>
+<button class="btn btn-primary" onclick="addToShop()">Adicionar</button>
+</div>
+</div>
+<div class="card">
+<h3>👥 Usuários</h3>
+<div id="admin-users"></div>
+</div>
+</div>
+</div>
+</div>
+
 <div id="messages"></div>
 </div>
-<script src="app.js"></script>
+<script src="game.js"></script>
 </body>
 </html>
