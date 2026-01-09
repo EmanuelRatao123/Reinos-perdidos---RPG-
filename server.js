@@ -13,8 +13,10 @@ const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'reinos_perdidos_2024';
-const ADMIN_USER = 'Emanuel';
-const ADMIN_PASS = 'Rato123';
+const ADMIN_USER = process.env.ADMIN_USER || 'Emanuel';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'Rato123';
+
+const loginAttempts = new Map();
 
 app.use(cors());
 app.use(express.json());
@@ -27,6 +29,8 @@ db.serialize(() => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
+    email TEXT,
+    recovery_code TEXT,
     is_admin BOOLEAN DEFAULT 0,
     is_banned BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -75,6 +79,25 @@ db.serialize(() => {
     message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS promo_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    type TEXT NOT NULL,
+    value TEXT NOT NULL,
+    uses INTEGER DEFAULT 0,
+    max_uses INTEGER DEFAULT 999,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  db.run(`CREATE TABLE IF NOT EXISTS code_redemptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    code_id INTEGER,
+    redeemed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    FOREIGN KEY (code_id) REFERENCES promo_codes (id)
+  )`);
 });
 
 const auth = (req, res, next) => {
@@ -93,20 +116,29 @@ const adminAuth = (req, res, next) => {
 };
 
 app.post('/api/register', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, email } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Dados obrigatórios' });
+  const recoveryCode = Math.random().toString(36).substring(2, 10).toUpperCase();
   const hashedPassword = await bcrypt.hash(password, 10);
-  db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword], function(err) {
+  db.run('INSERT INTO users (username, password, email, recovery_code) VALUES (?, ?, ?, ?)', 
+    [username, hashedPassword, email, recoveryCode], function(err) {
     if (err) return res.status(400).json({ error: 'Usuário já existe' });
     const token = jwt.sign({ id: this.lastID, username, isAdmin: false }, JWT_SECRET);
-    res.json({ token, user: { id: this.lastID, username, isAdmin: false } });
+    res.json({ token, user: { id: this.lastID, username, isAdmin: false }, recoveryCode });
   });
 });
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+  const ip = req.ip || req.connection.remoteAddress;
+  
+  const attempts = loginAttempts.get(ip) || { count: 0, lastAttempt: Date.now() };
+  if (attempts.count >= 5 && Date.now() - attempts.lastAttempt < 300000) {
+    return res.status(429).json({ error: 'Muitas tentativas. Aguarde 5 minutos.' });
+  }
   
   if (username === ADMIN_USER && password === ADMIN_PASS) {
+    loginAttempts.delete(ip);
     db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
       if (!user) {
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -126,11 +158,16 @@ app.post('/api/login', async (req, res) => {
   
   db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
     if (err || !user || !await bcrypt.compare(password, user.password)) {
+      attempts.count++;
+      attempts.lastAttempt = Date.now();
+      loginAttempts.set(ip, attempts);
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
+    
+    loginAttempts.delete(ip);
     if (user.is_banned) return res.status(403).json({ error: 'Usuário banido' });
-    const token = jwt.sign({ id: user.id, username, isAdmin: user.is_admin }, JWT_SECRET);
-    res.json({ token, user: { id: user.id, username, isAdmin: user.is_admin } });
+    const token = jwt.sign({ id: user.id, username: user.username, isAdmin: user.is_admin }, JWT_SECRET);
+    res.json({ token, user: { id: user.id, username: user.username, isAdmin: user.is_admin } });
   });
 });
 
@@ -326,6 +363,87 @@ app.post('/api/global-chat', auth, (req, res) => {
     if (err) return res.status(500).json({ error: 'Erro ao enviar' });
     io.emit('global_message', { username: req.user.username, message });
     res.json({ success: true });
+  });
+});
+
+app.post('/api/redeem-code', auth, (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Digite um código' });
+  
+  db.get('SELECT * FROM promo_codes WHERE code = ?', [code], (err, promo) => {
+    if (!promo) return res.status(404).json({ error: 'Código inválido' });
+    if (promo.uses >= promo.max_uses) return res.status(400).json({ error: 'Código esgotado' });
+    
+    db.get('SELECT * FROM code_redemptions WHERE user_id = ? AND code_id = ?', 
+      [req.user.id, promo.id], (err, used) => {
+      if (used) return res.status(400).json({ error: 'Você já usou este código' });
+      
+      db.get('SELECT * FROM characters WHERE user_id = ? LIMIT 1', [req.user.id], (err, char) => {
+        if (!char) return res.status(400).json({ error: 'Crie um personagem primeiro' });
+        
+        let reward = '';
+        if (promo.type === 'gold') {
+          db.run('UPDATE characters SET gold = gold + ? WHERE id = ?', [parseInt(promo.value), char.id]);
+          reward = `+${promo.value} ouro`;
+        } else if (promo.type === 'exp') {
+          db.run('UPDATE characters SET exp = exp + ? WHERE id = ?', [parseInt(promo.value), char.id]);
+          reward = `+${promo.value} EXP`;
+        } else if (promo.type === 'level') {
+          db.run('UPDATE characters SET level = level + ? WHERE id = ?', [parseInt(promo.value), char.id]);
+          reward = `+${promo.value} níveis`;
+        }
+        
+        db.run('UPDATE promo_codes SET uses = uses + 1 WHERE id = ?', [promo.id]);
+        db.run('INSERT INTO code_redemptions (user_id, code_id) VALUES (?, ?)', [req.user.id, promo.id]);
+        
+        res.json({ success: true, reward });
+      });
+    });
+  });
+});
+
+app.post('/api/admin/create-code', auth, adminAuth, (req, res) => {
+  const { code, type, value, maxUses } = req.body;
+  if (!code || !type || !value) return res.status(400).json({ error: 'Dados incompletos' });
+  
+  db.run('INSERT INTO promo_codes (code, type, value, max_uses) VALUES (?, ?, ?, ?)',
+    [code, type, value, maxUses || 999], function(err) {
+    if (err) return res.status(400).json({ error: 'Código já existe' });
+    res.json({ message: 'Código criado!', id: this.lastID });
+  });
+});
+
+app.get('/api/admin/codes', auth, adminAuth, (req, res) => {
+  db.all('SELECT * FROM promo_codes ORDER BY created_at DESC', (err, codes) => {
+    res.json(codes || []);
+  });
+});
+
+app.delete('/api/admin/code/:id', auth, adminAuth, (req, res) => {
+  db.run('DELETE FROM promo_codes WHERE id = ?', [req.params.id], (err) => {
+    if (err) return res.status(500).json({ error: 'Erro ao deletar' });
+    res.json({ message: 'Código deletado' });
+  });
+});
+
+app.post('/api/recover-account', async (req, res) => {
+  const { username, recoveryCode, newPassword } = req.body;
+  if (!username || !recoveryCode || !newPassword) {
+    return res.status(400).json({ error: 'Dados incompletos' });
+  }
+  
+  db.get('SELECT * FROM users WHERE username = ? AND recovery_code = ?', 
+    [username, recoveryCode], async (err, user) => {
+    if (!user) return res.status(404).json({ error: 'Usuário ou código inválido' });
+    
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const newRecoveryCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+    
+    db.run('UPDATE users SET password = ?, recovery_code = ? WHERE id = ?',
+      [hashedPassword, newRecoveryCode, user.id], (err) => {
+      if (err) return res.status(500).json({ error: 'Erro ao recuperar conta' });
+      res.json({ message: 'Senha alterada com sucesso!', newRecoveryCode });
+    });
   });
 });
 
